@@ -19,8 +19,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="hackmty26 anti-spoofing trainer")
     parser.add_argument(
         "mode",
-        choices=["extract", "train", "all"],
-        help="extract = cache WavLM embeddings, train = train classifier, all = both",
+        choices=["extract", "train", "calibrate", "all"],
+        help="extract = cache WavLM embeddings, train = train classifier, calibrate = fit isotonic regressor, all = extract + train",
     )
     parser.add_argument(
         "--config",
@@ -73,6 +73,16 @@ def main() -> None:
             lr=train_cfg["lr"],
             weight_decay=train_cfg["weight_decay"],
             patience=train_cfg["patience"],
+            device=train_cfg["device"],
+        )
+
+    if args.mode == "calibrate":
+        from src.calibrate import calibrate
+
+        calibrate(
+            cache_dir=data_cfg["cache_dir"],
+            checkpoint_dir=cfg["output"]["checkpoint_dir"],
+            model_path=cfg["output"]["model_path"],
             device=train_cfg["device"],
         )
 

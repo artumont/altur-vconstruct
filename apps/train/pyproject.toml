@@ -5,8 +5,6 @@ description = "Voice anti-spoofing classifier — real vs synthetic caller detec
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "torch[device-gfx1102]==2.15.0a0+rocm10.2.0a20260912",
-    "torchaudio==2.11.0.3+rocm10.2.0a20260912",
     "transformers>=4.40",
     "librosa>=0.10",
     "soundfile>=0.12",
@@ -17,52 +15,23 @@ dependencies = [
     "tqdm>=4.66",
     "einops>=0.7",
     "pandas-stubs>=3.0.5.260730",
+    "torch>=2.14.0",
+    "torchaudio>=2.11.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
     "ruff>=0.3",
 ]
 
-[project.scripts]
-train = "src.__main__:main"
-
-[[tool.uv.index]]
-name = "amd-rocm"
-url = "https://nightly.repo.amd.com/rocm/whl-next/"
-priority = "explicit"
-
-[tool.uv.sources]
-torch = { index = "amd-rocm" }
-torchaudio = { index = "amd-rocm" }
-triton = { index = "amd-rocm" }
-
-[tool.uv]
-prerelease = "allow"
-
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = "-v --tb=short"
-markers = ["unit: fast isolated unit tests"]
+requires = ["uv_build>=0.12.1,<0.13"]
+build-backend = "uv_build"
 
 [tool.basedpyright]
 venvPath = "."
 venv = ".venv"
 extraPaths = ["src"]
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-mypy_path = ["src", "."]
 
 [tool.ruff]
 target-version = "py311"
@@ -90,3 +59,6 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.uv]
+package = false
