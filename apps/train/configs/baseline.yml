@@ -1,0 +1,32 @@
+# Baseline config — all hyperparameters in one place
+
+data:
+  manifest_path: data/manifest.csv
+  audio_dir: audio
+  turns_dir: data/turns
+  cache_dir: checkpoints/embeddings_cache
+
+model:
+  input_dim: 1024        # WavLM-large hidden size
+  hidden_dims: [256, 128]
+  dropout: 0.3
+
+training:
+  batch_size: 64
+  epochs: 30
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  patience: 7
+  device: cuda
+
+extraction:
+  device: cuda
+  batch_size: 32
+  source_sr: 8000
+  target_sr: 16000
+  window_samples: 64000  # 4s @ 16kHz
+  hop_samples: 32000     # 50% overlap
+
+output:
+  checkpoint_dir: checkpoints
+  model_path: checkpoints/best_model.pt
