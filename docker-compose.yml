@@ -1,0 +1,17 @@
+name: hackmty26
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      additional_contexts:
+        train: ./apps/train
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist WavLM weights across container rebuilds — no re-download
+      - hf_cache:/opt/hf-cache
+
+volumes:
+  hf_cache:
