@@ -1,0 +1,7 @@
+[project]
+name = "hackmty26"
+version = "0.1.0"
+description = "Altur hackmty challenge"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
