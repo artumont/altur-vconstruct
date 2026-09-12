@@ -14,10 +14,10 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
-from bundle import bundle
+from pipeline.bundle import bundle  # pyright: ignore[reportMissingImports]
 from config import get_settings
 from schemas import DetectRequest, DetectResponse, ErrorResponse
-from service import AudioError, classify_wav_bytes, decode_base64_wav
+from pipeline.service import AudioError, classify_wav_bytes, decode_base64_wav  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def _load_models() -> None:
     try:
         bundle.ensure()
     except Exception as exc:  # pragma: no cover - startup failure
-        logger.error("Failed to load models at startup: %s", exc)
+        logger.error("Failed to load models at startup: %s", exc, exc_info=True)
 
 
 @app.get("/health")

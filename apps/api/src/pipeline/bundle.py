@@ -28,17 +28,15 @@ class ModelBundle:
         """Load the full stack if not already loaded."""
         if self.ready:
             return
-        from calibrator import load_calibrator
-        from extractor import SSLEvaluator
-        from model import SpoofClassifier
-        from resampler import Resampler
+        from models.calibrator import load_calibrator  # pyright: ignore[reportMissingImports]
+        from models.extractor import ONNXSSLEvaluator  # pyright: ignore[reportMissingImports]
+        from models.classifier import SpoofClassifier  # pyright: ignore[reportMissingImports]
+        from audio.resampler import Resampler  # pyright: ignore[reportMissingImports]
 
         settings = get_settings()
 
         self.resampler = Resampler(source_sr=8000, target_sr=16000)
-        self.ssl = SSLEvaluator(device=settings.device)
-        if settings.torch_dtype == torch.float16:
-            self.ssl.model.half()
+        self.ssl = ONNXSSLEvaluator(device=settings.device)
 
         classifier = SpoofClassifier(input_dim=1024)
         model_path = settings.resolved_model_path

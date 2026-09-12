@@ -13,7 +13,7 @@ import numpy as np
 import soundfile as sf
 import torch
 
-from bundle import bundle
+from pipeline.bundle import bundle  # pyright: ignore[reportMissingImports]
 from config import get_settings
 from schemas import DetectResponse
 
@@ -79,7 +79,7 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
     waveform = bundle.resampler.resample_tensor(caller, source_sr=sr)
 
     # Window into 4s chunks (50% overlap)
-    from windowing import window_waveform
+    from audio.windowing import window_waveform  # pyright: ignore[reportMissingImports]
 
     windows = window_waveform(waveform)
     windows = sample_windows(windows, settings.max_windows)
