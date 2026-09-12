@@ -5,6 +5,9 @@
 apps/fabrication/out/
 apps/fabrication/.cache/
 
+# Model checkpoints (large, regenerable)
+*.onnx
+
 
 ### Gitignore Template: Python ###
 
