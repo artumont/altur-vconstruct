@@ -1,5 +1,5 @@
 [project]
-name = "hackmty26-api"
+name = "altur-vconstruct-api"
 version = "0.1.0"
 description = "Voice anti-spoofing API — POST /detect for human vs synthetic caller"
 readme = "README.md"

@@ -1,4 +1,4 @@
-# hackmty26 — Voice Anti-Spoofing for Altur Challenge
+# altur-vconstruct — Voice Anti-Spoofing for Altur Challenge
 
 Detect whether the caller in a phone call is a **real human** or a **synthetic voice** (TTS deepfake).
 
@@ -62,7 +62,7 @@ cd ../.. && docker compose up --build
 ## Project Structure
 
 ```
-hackmty26/
+altur-vconstruct/
 ├── apps/
 │   ├── api/               # FastAPI inference service (POST /detect)
 │   └── train/             # Training pipeline (extract, train, calibrate)

@@ -1,4 +1,4 @@
-# AGENTS.md — HackMTY26
+# AGENTS.md — altur-vconstruct
 
 ## Repository purpose
 
@@ -11,7 +11,7 @@ Hackathon project for **Altur Challenge: Detect real vs synthetic voice in phone
 ## Repository structure
 
 ```
-hackmty26/
+altur-vconstruct/
 ├── api/                     # FastAPI endpoint (POST /detect)
 ├── audio/                   # ⚠️ Gitignored — unzip altur-challenge-audio.zip here
 ├── checkpoints/             # Saved model weights

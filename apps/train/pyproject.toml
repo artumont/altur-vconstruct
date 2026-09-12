@@ -1,5 +1,5 @@
 [project]
-name = "hackmty26-train"
+name = "altur-vconstruct-train"
 version = "0.1.0"
 description = "Voice anti-spoofing classifier — real vs synthetic caller detection"
 readme = "README.md"

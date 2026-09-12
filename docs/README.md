@@ -1,4 +1,4 @@
-# hackmty26 — Docs
+# altur-vconstruct — Docs
 
 Detailed documentation for the voice anti-spoofing system.
 
@@ -17,4 +17,4 @@ Detailed documentation for the voice anti-spoofing system.
 ## Quick Links
 
 - **Root README**: [../README.md](../README.md) — project overview
-- **Challenge repo**: hackmty26 altur challenge
+- **Challenge repo**: altur-vconstruct

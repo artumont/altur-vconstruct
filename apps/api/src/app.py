@@ -21,7 +21,7 @@ from pipeline.service import AudioError, classify_wav_bytes, decode_base64_wav  
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="hackmty26 voice anti-spoofing", version="0.1.0")
+app = FastAPI(title="altur-vconstruct", version="0.1.0")
 
 _settings = get_settings()
 

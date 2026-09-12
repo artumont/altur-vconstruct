@@ -1,4 +1,4 @@
-"""Training entry point for hackmty26 voice anti-spoofing classifier."""
+"""Training entry point for altur-vconstruct voice anti-spoofing classifier."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def main() -> None:
         FileNotFoundError: If config file does not exist.
         ValueError: If config file contains invalid YAML.
     """
-    parser = argparse.ArgumentParser(description="hackmty26 anti-spoofing trainer")
+    parser = argparse.ArgumentParser(description="altur-vconstruct anti-spoofing trainer")
     parser.add_argument(
         "mode",
         choices=["extract", "train", "calibrate", "all"],
