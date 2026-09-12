@@ -1,4 +1,4 @@
-# altur-vconstruct — Voice Anti-Spoofing for Altur Challenge
+# altur-vconstruct 
 
 Detect whether the caller in a phone call is a **real human** or a **synthetic voice** (TTS deepfake).
 
