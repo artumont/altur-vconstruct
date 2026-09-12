@@ -1,27 +1,20 @@
-# HackMTY26 — Detección de voz real vs. sintética en llamadas telefónicas
+# hackmty26 — Docs
 
-## Resumen del proyecto
+Detailed documentation for the voice anti-spoofing system.
 
-Hackathon del **Track Altur**: «Defend the Bank Against Voice Deepfakes».
+## Documents
 
-**Objetivo:** Clasificar si el caller entrante en una llamada telefónica es humano real o voz sintética (deepfake).
+| Document | Contents |
+| ---------- | ---------- |
+| [architecture.md](architecture.md) | Model design, SSL backbone, MLP head, calibration, channel separation |
+| [decisions.md](decisions.md) | All design decisions with rationale (window sampling, ONNX, calibration, etc.) |
+| [inference.md](inference.md) | Step-by-step inference pipeline, latency profile, benchmarking |
+| [setup.md](setup.md) | Training, API, Docker, testing, env vars, troubleshooting |
+| [benchmarks.md](benchmarks.md) | PyTorch vs ONNX comparison, per-stage latency, benchmark scripts |
+| [entregables.md](entregables.md) | Challenge deliverables, scoring criteria, checklist |
+| [arquitectura.md](arquitectura.md) | Initial architecture exploration (Spanish, early planning) |
 
-## Archivos del proyecto
+## Quick Links
 
-| Archivo | Contenido |
-| --------- | ----------- |
-| [scope.md](scope.md) | Scope técnico, restricciones, problemas, arquitectura recomendada |
-| [entregables.md](entregables.md) | Entregables obligatorios, scoring criteria, checklist |
-| [datasets.md](datasets.md) | Datasets disponibles y referencias |
-| [arquitectura.md](arquitectura.md) | Modelos, pipelines, y decisiones de diseño |
-
-## Links clave
-
-- **Notion original:** [Hackathon Detección de voz](https://app.notion.com/p/Hackathon-Detecci-n-de-voz-real-vs-sint-tica-en-llamadas-telef-nicas-3d9d07474110814fbb95e66cafe734f6)
-- **Código:** `/home/artu/Desktop/Code/hackmty26/`
-
-## Equipo
-
-- Altur construye agentes de voz AI para bancos en Latam (México, Colombia, Perú, Chile, Brasil)
-- Manejan millones de llamadas telefónicas reales en español
-- Plataforma: cobranza, servicio al cliente, campañas salientes
+- **Root README**: [../README.md](../README.md) — project overview
+- **Challenge repo**: hackmty26 altur challenge
