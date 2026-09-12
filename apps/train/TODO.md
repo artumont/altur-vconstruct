@@ -1,11 +1,5 @@
 # TODO — Training Pipeline
 
-## Phase 0: Setup
-
-- [ ] `cd apps/train && uv sync` — install dependencies
-- [ ] Verify GPU available: `python -c "import torch; print(torch.cuda.is_available())"`
-- [ ] Download WavLM-large model (auto on first run via transformers)
-
 ## Phase 1: Dataset + Preprocessing
 
 - [ ] **`src/dataset.py`** — AudioWindowDataset

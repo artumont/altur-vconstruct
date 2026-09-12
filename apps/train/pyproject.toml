@@ -3,10 +3,10 @@ name = "hackmty26-train"
 version = "0.1.0"
 description = "Voice anti-spoofing classifier — real vs synthetic caller detection"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
-    "torch>=2.1",
-    "torchaudio>=2.1",
+    "torch[device-gfx1102]==2.15.0a0+rocm10.2.0a20260912",
+    "torchaudio==2.11.0.3+rocm10.2.0a20260912",
     "transformers>=4.40",
     "librosa>=0.10",
     "soundfile>=0.12",
@@ -17,8 +17,6 @@ dependencies = [
     "tqdm>=4.66",
     "einops>=0.7",
     "pandas-stubs>=3.0.5.260730",
-    "ruff>=0.16.7",
-    "pytest>=9.1.1",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +27,19 @@ dev = [
 
 [project.scripts]
 train = "src.__main__:main"
+
+[[tool.uv.index]]
+name = "amd-rocm"
+url = "https://nightly.repo.amd.com/rocm/whl-next/"
+priority = "explicit"
+
+[tool.uv.sources]
+torch = { index = "amd-rocm" }
+torchaudio = { index = "amd-rocm" }
+triton = { index = "amd-rocm" }
+
+[tool.uv]
+prerelease = "allow"
 
 [build-system]
 requires = ["hatchling"]
