@@ -2,6 +2,10 @@ audio/
 *.zip
 .DS_Store
 
+# Fabrication outputs + caches (regenerable, large)
+apps/fabrication/out/
+apps/fabrication/.cache/
+
 
 ### Gitignore Template: Python ###
 
