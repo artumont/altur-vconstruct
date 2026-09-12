@@ -1,7 +1,6 @@
 {
-  "venvPath": "apps/train",
+  "typeCheckingMode": "basic",
+  "venvPath": "apps/api",
   "venv": ".venv",
-  "extraPaths": ["apps/train/src", "apps/api"],
-  "pythonVersion": "3.11",
-  "typeCheckingMode": "basic"
+  "extraPaths": ["apps/train"]
 }
