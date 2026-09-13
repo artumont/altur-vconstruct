@@ -1,0 +1,18 @@
+name: altur-vconstruct
+
+services:
+  api:
+    image: ghcr.io/artumont/altur-vconstruct/api:4b395842afa99b8f0243e46af1313092fd1ed346
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/artumont/altur-vconstruct/web:4b395842afa99b8f0243e46af1313092fd1ed346
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - api
+    restart: unless-stopped
