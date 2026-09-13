@@ -6,12 +6,15 @@ through ONNX Runtime instead of PyTorch. ~2x faster on CPU.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort  # pyright: ignore[reportMissingImports]
 import torch
+
+logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 1024
 SAMPLE_RATE = 16000
@@ -53,11 +56,10 @@ class ONNXSSLEvaluator:
         """Load WavLM ONNX model.
 
         Args:
-            device: Ignored (always CPU for ONNX). Kept for API compat.
+            device: Hint for placement. ONNX provider auto-detected.
             model_path: Path to wavlm-large.onnx. Auto-detected if None.
             intra_threads: ORT intra-op parallelism. 6 is sweet-spot on 12-core.
         """
-        self.device = torch.device("cpu")  # ONNX always CPU
         self.model_path = Path(model_path) if model_path else _default_onnx_path()
 
         so = ort.SessionOptions()
@@ -65,7 +67,19 @@ class ONNXSSLEvaluator:
         so.intra_op_num_threads = intra_threads
         so.inter_op_num_threads = 1  # single batch, no inter-op needed
 
-        self._session = ort.InferenceSession(str(self.model_path), so)
+        # Try GPU first, fall back to CPU
+        providers = []
+        available = ort.get_available_providers()
+        if "CUDAExecutionProvider" in available:
+            providers.append("CUDAExecutionProvider")
+            self.device = torch.device("cuda")
+            logger.info("ONNX using CUDAExecutionProvider")
+        else:
+            self.device = torch.device("cpu")
+            logger.info("ONNX using CPUExecutionProvider (no GPU)")
+        providers.append("CPUExecutionProvider")
+
+        self._session = ort.InferenceSession(str(self.model_path), so, providers=providers)
         self._input_name = self._session.get_inputs()[0].name
 
     @torch.no_grad()
