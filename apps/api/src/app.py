@@ -30,6 +30,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
+logging.getLogger("pipeline").setLevel(logging.INFO)
+
 _settings = get_settings()
 
 
