@@ -37,6 +37,8 @@ print('Done') \
 
 FROM python:3.12-slim
 
+RUN addgroup --system app && adduser --system --ingroup app app
+
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /app/train /app/train
 COPY --from=builder /app/model /app/model
@@ -48,5 +50,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app/src:/app/train"
+
+USER app
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
