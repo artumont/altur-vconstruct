@@ -49,7 +49,7 @@ train: ## Run training pipeline; override TRAIN_MODE and TRAIN_CONFIG
 augment-train: ## Generate train-only augmented audio
 	$(UV) run --project apps/dataset python -m dataset \
 		--manifest apps/train/data/manifest.csv \
-		--audio-dir apps/train/audio \
+		--audio-dir apps/train/data/audio \
 		--out $(AUGMENT_OUT) \
 		--split train \
 		--variants $(AUGMENT_VARIANTS) \
@@ -58,7 +58,7 @@ augment-train: ## Generate train-only augmented audio
 augment-judge: ## Generate judge perturbations from untouched validation calls
 	$(UV) run --project apps/dataset python -m dataset \
 		--manifest apps/train/data/manifest.csv \
-		--audio-dir apps/train/audio \
+		--audio-dir apps/train/data/audio \
 		--out $(JUDGE_AUGMENT_OUT) \
 		--split val \
 		--output-split hidden \
