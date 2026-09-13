@@ -1,0 +1,41 @@
+# Round-two fine-tuning config. Generate augmented train data first.
+
+data:
+  manifest_path: data/manifest.csv
+  audio_dir: audio
+  turns_dir: data/turns
+  cache_dir: checkpoints/embeddings_cache
+  augmented:
+    manifest_path: data/augmented_train/manifest.csv
+    audio_dir: data/augmented_train/audio
+    turns_dir: data/turns
+    cache_dir: checkpoints/embeddings_cache
+    cache_suffix: _augmented
+
+model:
+  input_dim: 1024
+  hidden_dims: [256, 128]
+  dropout: 0.3
+
+training:
+  batch_size: 64
+  epochs: 15
+  lr: 1.0e-5
+  weight_decay: 1.0e-4
+  patience: 4
+  device: cuda
+  init_checkpoint: checkpoints/best_model.pt
+  extra_cache_paths:
+    - checkpoints/embeddings_cache/train_augmented.pt
+
+extraction:
+  device: cuda
+  batch_size: 32
+  source_sr: 8000
+  target_sr: 16000
+  window_samples: 64000
+  hop_samples: 32000
+
+output:
+  checkpoint_dir: checkpoints/round2
+  model_path: checkpoints/round2/best_model.pt

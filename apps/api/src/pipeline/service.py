@@ -127,7 +127,9 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
         (t_end - t0) * 1000,
         duration_s,
     )
-    return DetectResponse(is_synthetic=confidence >= 0.5, confidence=round(max(confidence, 1 - confidence), 4))
+    return DetectResponse(
+        is_synthetic=confidence >= 0.5, confidence=round(max(confidence, 1 - confidence), 4)
+    )
 
 
 def decode_base64_wav(encoded: str) -> bytes:
@@ -146,4 +148,3 @@ def decode_base64_wav(encoded: str) -> bytes:
         return base64.b64decode(encoded, validate=True)
     except Exception as exc:
         raise AudioError("Invalid base64") from exc
-

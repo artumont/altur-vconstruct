@@ -19,8 +19,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="altur-vconstruct anti-spoofing trainer")
     parser.add_argument(
         "mode",
-        choices=["extract", "train", "calibrate", "all"],
-        help="extract = cache WavLM embeddings, train = train classifier, calibrate = fit isotonic regressor, all = extract + train",
+        choices=["extract", "extract_augmented", "train", "round2", "calibrate", "all"],
+        help="extract = cache base embeddings, extract_augmented = cache augmented train embeddings, train = train classifier, round2 = fine-tune from checkpoint, calibrate = fit isotonic regressor, all = extract + train",
     )
     parser.add_argument(
         "--config",
@@ -62,8 +62,33 @@ def main() -> None:
             batch_size=extract_cfg["batch_size"],
         )
 
-    if args.mode in ("train", "all"):
+    if args.mode in ("extract_augmented", "round2"):
+        from src.train import pre_extract_embeddings
+
+        augmented_cfg = data_cfg.get("augmented")
+        if augmented_cfg is None:
+            raise ValueError("Config requires data.augmented for augmented extraction")
+        pre_extract_embeddings(
+            manifest_path=augmented_cfg["manifest_path"],
+            audio_dir=augmented_cfg["audio_dir"],
+            turns_dir=augmented_cfg.get("turns_dir", data_cfg["turns_dir"]),
+            cache_dir=augmented_cfg.get("cache_dir", data_cfg["cache_dir"]),
+            device=extract_cfg["device"],
+            batch_size=extract_cfg["batch_size"],
+            splits=("train",),
+            cache_suffix=augmented_cfg.get("cache_suffix", "_augmented"),
+        )
+
+    if args.mode in ("train", "round2", "all"):
         from src.train import train
+
+        extra_cache_paths = list(train_cfg.get("extra_cache_paths", []))
+        init_checkpoint = train_cfg.get("init_checkpoint")
+        if args.mode == "round2" and not extra_cache_paths:
+            augmented_cfg = data_cfg["augmented"]
+            suffix = augmented_cfg.get("cache_suffix", "_augmented")
+            augmented_cache_dir = augmented_cfg.get("cache_dir", data_cfg["cache_dir"])
+            extra_cache_paths.append(str(Path(augmented_cache_dir) / f"train{suffix}.pt"))
 
         train(
             cache_dir=data_cfg["cache_dir"],
@@ -74,6 +99,8 @@ def main() -> None:
             weight_decay=train_cfg["weight_decay"],
             patience=train_cfg["patience"],
             device=train_cfg["device"],
+            extra_cache_paths=extra_cache_paths,
+            init_checkpoint=init_checkpoint,
         )
 
     if args.mode == "calibrate":

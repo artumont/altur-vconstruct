@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
-import torch
-import torch.nn as nn
-from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.utils.data import DataLoader, TensorDataset
+import torch  # pyright: ignore[reportMissingImports]
+import torch.nn as nn  # pyright: ignore[reportMissingImports]
+from torch.optim import AdamW  # pyright: ignore[reportMissingImports]
+from torch.optim.lr_scheduler import CosineAnnealingLR  # pyright: ignore[reportMissingImports]
+from torch.utils.data import DataLoader, TensorDataset  # pyright: ignore[reportMissingImports]
 
 from src.dataset.extractor import SAMPLE_RATE, WINDOW_SAMPLES, SSLEvaluator
 from src.dataset.filter import get_samples
@@ -57,6 +58,8 @@ def pre_extract_embeddings(
     cache_dir: str | Path,
     device: str = "cuda",
     batch_size: int = 32,
+    splits: Sequence[str] = ("train", "val"),
+    cache_suffix: str = "",
 ) -> None:
     """Extract WavLM embeddings for all splits and cache to disk.
 
@@ -67,6 +70,11 @@ def pre_extract_embeddings(
         cache_dir: Output directory for cached embeddings.
         device: Device for WavLM inference.
         batch_size: Batch size for extraction.
+        splits: Manifest splits to extract.
+        cache_suffix: Suffix appended to each split cache filename.
+
+    Raises:
+        RuntimeError: If no audio embeddings can be extracted for a split.
     """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -74,8 +82,8 @@ def pre_extract_embeddings(
     resampler = Resampler(source_sr=SAMPLE_RATE // 2, target_sr=SAMPLE_RATE)
     ssl = SSLEvaluator(device=device)
 
-    for split in ("train", "val"):
-        out_path = cache_dir / f"{split}.pt"
+    for split in splits:
+        out_path = cache_dir / f"{split}{cache_suffix}.pt"
         if out_path.exists():
             logger.info("Skipping %s — already cached at %s", split, out_path)
             continue
@@ -107,6 +115,9 @@ def pre_extract_embeddings(
 
             label = 1.0 if sample.label == "synthetic" else 0.0
             all_labels.extend([label] * len(windows))  # type: ignore[arg-type]
+
+        if not all_embeddings:
+            raise RuntimeError(f"No embeddings extracted for split {split!r}")
 
         embeddings = torch.cat(all_embeddings, dim=0)  # (N_total, 1024)
         labels = torch.tensor(all_labels, dtype=torch.float32)  # (N_total,)
@@ -162,6 +173,35 @@ def compute_eer(
 # ── Training Loop ──────────────────────────────────────────────────────────────
 
 
+def evaluate(
+    model: SpoofClassifier,
+    loader: DataLoader,
+    labels: torch.Tensor,
+    criterion: nn.Module,
+    device: torch.device,
+) -> tuple[float, torch.Tensor, float, float]:
+    """Evaluate model and return loss, scores, EER, and accuracy.
+
+    Returns:
+        Tuple of loss, prediction scores, EER, and threshold accuracy.
+    """
+    model.eval()
+    total_loss = 0.0
+    all_preds: list[torch.Tensor] = []
+    with torch.no_grad():
+        for x_batch, y_batch in loader:
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+            preds = model(x_batch).squeeze(1)
+            total_loss += criterion(preds, y_batch).item() * x_batch.shape[0]
+            all_preds.append(preds.cpu())
+
+    scores = torch.cat(all_preds)
+    loss = total_loss / len(labels)
+    eer = compute_eer(labels, scores)
+    accuracy = ((scores >= 0.5).float() == labels).float().mean().item()
+    return loss, scores, eer, accuracy
+
+
 def train(
     cache_dir: str | Path,
     output_dir: str | Path,
@@ -171,6 +211,8 @@ def train(
     weight_decay: float = 1e-4,
     patience: int = 7,
     device: str = "cuda",
+    extra_cache_paths: Sequence[str | Path] = (),
+    init_checkpoint: str | Path | None = None,
 ) -> SpoofClassifier:
     """Train the spoof classifier on cached embeddings.
 
@@ -183,6 +225,8 @@ def train(
         weight_decay: AdamW weight decay.
         patience: Early stopping patience.
         device: Training device.
+        extra_cache_paths: Additional training embedding caches to concatenate.
+        init_checkpoint: Optional classifier checkpoint for fine-tuning.
 
     Returns:
         Best trained SpoofClassifier.
@@ -197,6 +241,14 @@ def train(
 
     train_embs = train_data["embeddings"]
     train_labels = train_data["labels"]
+    for extra_path in extra_cache_paths:
+        extra_data = torch.load(Path(extra_path), weights_only=True)
+        train_embs = torch.cat((train_embs, extra_data["embeddings"]), dim=0)
+        train_labels = torch.cat((train_labels, extra_data["labels"]), dim=0)
+        logger.info(
+            "Added training cache %s: %d windows", extra_path, extra_data["embeddings"].shape[0]
+        )
+
     val_embs = val_data["embeddings"]
     val_labels = val_data["labels"]
 
@@ -215,6 +267,12 @@ def train(
     # Model
     dev = torch.device(device)
     model = SpoofClassifier(input_dim=train_embs.shape[1]).to(dev)
+    if init_checkpoint is not None:
+        checkpoint = torch.load(init_checkpoint, weights_only=True, map_location=dev)
+        state_dict = checkpoint.get("model_state_dict", checkpoint)
+        model.load_state_dict(state_dict)
+        logger.info("Initialized model from checkpoint %s", init_checkpoint)
+
     criterion = nn.BCELoss()
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
@@ -224,6 +282,12 @@ def train(
     best_eer = 1.0
     best_epoch = 0
     epochs_no_improve = 0
+    save_path = output_dir / "best_model.pt"
+
+    if init_checkpoint is not None:
+        _, _, best_eer, initial_acc = evaluate(model, val_loader, val_labels, criterion, dev)
+        torch.save(model.state_dict(), save_path)
+        logger.info("Initial checkpoint validation — acc=%.4f | EER=%.4f", initial_acc, best_eer)
 
     for epoch in range(1, epochs + 1):
         # ── Train ──
@@ -240,21 +304,7 @@ def train(
         train_loss /= len(train_ds)
 
         # ── Validate ──
-        model.eval()
-        val_loss = 0.0
-        all_preds: list[torch.Tensor] = []
-        with torch.no_grad():
-            for x_batch, y_batch in val_loader:
-                x_batch, y_batch = x_batch.to(dev), y_batch.to(dev)
-                preds = model(x_batch).squeeze(1)
-                loss = criterion(preds, y_batch)
-                val_loss += loss.item() * x_batch.shape[0]
-                all_preds.append(preds.cpu())
-        val_loss /= len(val_ds)
-
-        val_scores = torch.cat(all_preds)
-        eer = compute_eer(val_labels, val_scores)
-        acc = ((val_scores >= 0.5).float() == val_labels).float().mean().item()
+        val_loss, val_scores, eer, acc = evaluate(model, val_loader, val_labels, criterion, dev)
 
         scheduler.step()
 
@@ -274,7 +324,6 @@ def train(
             best_eer = eer
             best_epoch = epoch
             epochs_no_improve = 0
-            save_path = output_dir / "best_model.pt"
             torch.save(model.state_dict(), save_path)
             logger.info("  ✓ New best — saved to %s", save_path)
         else:

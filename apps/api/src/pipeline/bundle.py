@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-import torch
+import torch  # pyright: ignore[reportMissingImports]
 
 from config import get_settings
 
@@ -25,13 +25,17 @@ class ModelBundle:
         self.calibrator = None
 
     def ensure(self) -> None:
-        """Load the full stack if not already loaded."""
+        """Load the full stack if not already loaded.
+
+        Raises:
+            FileNotFoundError: If model or calibrator files are unavailable.
+        """
         if self.ready:
             return
-        from models.calibrator import load_calibrator  # pyright: ignore[reportMissingImports]
-        from models.extractor import ONNXSSLEvaluator  # pyright: ignore[reportMissingImports]
-        from models.classifier import SpoofClassifier  # pyright: ignore[reportMissingImports]
         from audio.resampler import Resampler  # pyright: ignore[reportMissingImports]
+        from models.calibrator import load_calibrator  # pyright: ignore[reportMissingImports]
+        from models.classifier import SpoofClassifier  # pyright: ignore[reportMissingImports]
+        from models.extractor import ONNXSSLEvaluator  # pyright: ignore[reportMissingImports]
 
         settings = get_settings()
 
@@ -42,9 +46,7 @@ class ModelBundle:
         model_path = settings.resolved_model_path
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found: {model_path}")
-        state = torch.load(
-            model_path, weights_only=True, map_location=settings.device
-        )
+        state = torch.load(model_path, weights_only=True, map_location=settings.device)
         classifier.load_state_dict(state)
         classifier.to(settings.device).eval()
         self.classifier = classifier
@@ -63,4 +65,3 @@ class ModelBundle:
 
 
 bundle = ModelBundle()
-

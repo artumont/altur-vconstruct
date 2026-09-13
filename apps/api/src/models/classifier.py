@@ -6,8 +6,8 @@ image is self-contained.
 
 from __future__ import annotations
 
-import torch
-import torch.nn as nn
+import torch  # pyright: ignore[reportMissingImports]
+import torch.nn as nn  # pyright: ignore[reportMissingImports]
 
 
 class SpoofClassifier(nn.Module):

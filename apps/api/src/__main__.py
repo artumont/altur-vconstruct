@@ -7,14 +7,24 @@ Usage:
 
 from __future__ import annotations
 
+import os
+
 import uvicorn  # pyright: ignore[reportMissingImports]
 
 
 def main() -> None:
-    """Run the uvicorn server."""
-    uvicorn.run("app:app", host="0.0.0.0", port=8000)
+    """Run the uvicorn server.
+
+    Raises:
+        ValueError: If API_PORT is not an integer.
+    """
+    host = os.environ.get("API_HOST", "0.0.0.0")
+    try:
+        port = int(os.environ.get("API_PORT", "8000"))
+    except ValueError as exc:
+        raise ValueError("API_PORT must be an integer") from exc
+    uvicorn.run("app:app", host=host, port=port)
 
 
 if __name__ == "__main__":
     main()
-

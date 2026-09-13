@@ -9,9 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import soundfile as sf
-import torch
-import torchaudio
+import soundfile as sf  # pyright: ignore[reportMissingImports]
+import torch  # pyright: ignore[reportMissingImports]
+import torchaudio  # pyright: ignore[reportMissingImports]
 
 
 def load_wav(wav_path: Path | str) -> tuple[torch.Tensor, int]:

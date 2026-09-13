@@ -5,8 +5,8 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-import torch
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import torch  # pyright: ignore[reportMissingImports]
+from pydantic_settings import BaseSettings, SettingsConfigDict  # pyright: ignore[reportMissingImports]
 
 ROOT = Path(__file__).resolve().parent
 
@@ -35,6 +35,9 @@ class Settings(BaseSettings):
 
         Docker image puts checkpoints at /app/model/checkpoints; local repo
         keeps them at apps/train/checkpoints.
+
+        Returns:
+            First existing checkpoint path, or default candidate path.
         """
         if value is not None:
             if value.is_absolute():
@@ -52,10 +55,12 @@ class Settings(BaseSettings):
 
     @property
     def resolved_model_path(self) -> Path:
+        """Resolved classifier checkpoint path."""
         return self._resolve("best_model.pt", self.model_path)
 
     @property
     def resolved_calibrator_path(self) -> Path:
+        """Resolved confidence calibrator path."""
         return self._resolve("calibrator.joblib", self.calibrator_path)
 
     @property
@@ -68,4 +73,3 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return cached settings singleton."""
     return Settings()
-

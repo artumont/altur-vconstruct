@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import joblib
-from sklearn.isotonic import IsotonicRegression
+import joblib  # pyright: ignore[reportMissingImports]
+from sklearn.isotonic import IsotonicRegression  # pyright: ignore[reportMissingImports]
 
 
 def load_calibrator(path: str | Path) -> IsotonicRegression:
