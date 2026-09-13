@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from pipeline.bundle import bundle  # pyright: ignore[reportMissingImports]
 from config import get_settings
@@ -22,6 +23,12 @@ from pipeline.service import AudioError, classify_wav_bytes, decode_base64_wav  
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="altur-vconstruct", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _settings = get_settings()
 

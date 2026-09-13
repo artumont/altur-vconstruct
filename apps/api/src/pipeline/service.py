@@ -105,7 +105,7 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
         confidence = float(bundle.calibrator.predict([mean_score])[0])
     except Exception as exc:
         raise AudioError(f"Scoring failed: {exc}") from exc
-    return DetectResponse(is_synthetic=confidence >= 0.5, confidence=round(confidence, 4))
+    return DetectResponse(is_synthetic=confidence >= 0.5, confidence=round(max(confidence, 1 - confidence), 4))
 
 
 def decode_base64_wav(encoded: str) -> bytes:
