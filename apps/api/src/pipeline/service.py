@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import time
 
 import numpy as np
 import soundfile as sf
@@ -57,6 +58,7 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
     Raises:
         AudioError: If audio is corrupted or empty.
     """
+    t0 = time.perf_counter()
     bundle.ensure()
     settings = get_settings()
 
@@ -67,6 +69,7 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
         raise AudioError(f"Unreadable WAV: {exc}") from exc
     if data.size == 0:
         raise AudioError("Empty audio")
+    t_wav = time.perf_counter()
 
     # Channel 0 = caller; mono falls back to the single channel
     if data.ndim == 1:
@@ -83,6 +86,7 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
 
     windows = window_waveform(waveform)
     windows = sample_windows(windows, settings.max_windows)
+    t_window = time.perf_counter()
 
     # Batch embeddings through frozen WavLM
     assert bundle.ssl is not None
@@ -92,11 +96,13 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
         chunk = torch.stack(windows[i : i + settings.extract_batch_size]).to(dtype=dtype)
         batches.append(bundle.ssl.extract_batch(chunk).float().cpu())
     embs = torch.cat(batches, dim=0)  # (N, 1024)
+    t_embed = time.perf_counter()
 
     # Classifier scores per window
     assert bundle.classifier is not None
     with torch.no_grad():
         scores = bundle.classifier(embs.to(settings.device)).squeeze(1).cpu().numpy()
+    t_classify = time.perf_counter()
 
     # Aggregate (mean) + calibrate
     try:
@@ -105,6 +111,22 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
         confidence = float(bundle.calibrator.predict([mean_score])[0])
     except Exception as exc:
         raise AudioError(f"Scoring failed: {exc}") from exc
+    t_end = time.perf_counter()
+
+    duration_s = data.shape[0] / sr
+    logger.info(
+        "detect latency — wav_decode: %.1fms | resample+window: %.1fms | "
+        "onnx_embed: %.1fms (%d windows) | classifier: %.1fms | "
+        "calibrate: %.1fms | total: %.1fms | audio_duration: %.1fs",
+        (t_wav - t0) * 1000,
+        (t_window - t_wav) * 1000,
+        (t_embed - t_window) * 1000,
+        len(windows),
+        (t_classify - t_embed) * 1000,
+        (t_end - t_classify) * 1000,
+        (t_end - t0) * 1000,
+        duration_s,
+    )
     return DetectResponse(is_synthetic=confidence >= 0.5, confidence=round(max(confidence, 1 - confidence), 4))
 
 
