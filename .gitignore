@@ -8,6 +8,11 @@ apps/fabrication/.cache/
 # Model checkpoints (large, regenerable)
 *.onnx
 
+# Generated local judge fixture (regenerable, binary audio)
+tests/judge/test_set/
+tests/judge/augmented_val/
+tests/judge/spanish_test_set/
+
 
 ### Gitignore Template: Python ###
 
