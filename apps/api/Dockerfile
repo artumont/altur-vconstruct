@@ -24,7 +24,7 @@ m = WavLMModel.from_pretrained('microsoft/wavlm-large'); \
 m.eval(); \
 print('Exporting to ONNX...'); \
 torch.onnx.export( \
-    m, torch.randn(1, 64000), \
+    m, torch.randn(1, 48000), \
     'model/checkpoints/wavlm-large.onnx', \
     input_names=['input_values'], \
     output_names=['last_hidden_state'], \

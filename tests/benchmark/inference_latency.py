@@ -43,7 +43,7 @@ BENCH_RUNS = 10          # measured iterations
 AUDIO_DURATIONS_S = [2, 5, 10, 20]  # simulate short → long calls
 SAMPLE_RATE = 8000       # telephony input
 TARGET_SR = 16000        # WavLM expects 16 kHz
-MAX_WINDOWS = 4          # matches settings default
+MAX_WINDOWS = 1          # matches settings default
 
 
 # ── synthetic WAV generator ─────────────────────────────────────────────────
@@ -118,7 +118,7 @@ def benchmark_stages(
     waveform = resampler.resample_tensor(caller, source_sr=sr)
     timer.record("2_resample", time.perf_counter() - t0)
 
-    # Stage 3: window into 4s chunks
+    # Stage 3: window into 3s chunks
     t0 = time.perf_counter()
     windows = window_waveform(waveform)
     timer.record("3_window", time.perf_counter() - t0)
@@ -230,9 +230,9 @@ def main():
     # ── benchmark per duration ──────────────────────────────────────────
     for dur in AUDIO_DURATIONS_S:
         wav = make_stereo_wav_bytes(dur)
-        # approximate window count: 50% overlap, 4s windows
+        # approximate window count: 50% overlap, 3s windows
         n_samples_16k = dur * TARGET_SR
-        n_windows_raw = max(1, int((n_samples_16k - 64000) / 32000) + 1)
+        n_windows_raw = max(1, int((n_samples_16k - 48000) / 24000) + 1)
         n_windows_capped = min(n_windows_raw, MAX_WINDOWS)
         print(f"\n── Audio: {dur}s  (~{n_windows_raw} raw windows → {n_windows_capped} scored) ──")
 

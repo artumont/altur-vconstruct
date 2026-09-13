@@ -11,15 +11,15 @@ Audio (8 kHz stereo WAV)
   |
   +-- Resample 8 kHz -> 16 kHz
   |
-  +-- Window into 4s chunks (50% overlap)
+  +-- Window into 3s inference chunks (50% overlap)
   |
-  +-- Sample max 2 evenly-spaced windows  <-- latency optimization
+  +-- Select one highest-energy caller window  <-- latency optimization
   |
   +-- WavLM-large (frozen) -> 1024-dim embeddings (mean-pooled)
   |
   +-- MLP classifier -> spoof probability per window
   |
-  +-- Mean aggregate + isotonic calibration
+  +-- Isotonic calibration + threshold recentering
   |
   +-- { is_synthetic, confidence }
 ```
@@ -41,8 +41,9 @@ WavLM achieves the lowest error rate on standard anti-spoofing benchmarks. Its f
 The backbone is **fully frozen** during training. We extract 1024-dim embeddings by mean-pooling the `last_hidden_state` over the time axis:
 
 ```
-Input:  (B, 64000) — 4s mono at 16 kHz
-Output: (B, 1024)  — mean-pooled embedding
+Training input:  (B, 64000) — 4s mono at 16 kHz
+Inference input: (B, 48000) — 3s mono at 16 kHz
+Output:          (B, 1024)  — mean-pooled embedding
 ```
 
 ## Classifier: SpoofClassifier MLP
@@ -69,7 +70,7 @@ Raw sigmoid outputs are not reliable probabilities. The challenge uses `confiden
 
 We fit `sklearn.IsotonicRegression` on validation-set predictions. Isotonic is non-parametric (no sigmoid shape assumption) and handles the bimodal score distribution better than Platt scaling.
 
-The fitted calibrator is saved as `calibrator.joblib` and loaded at API startup. At inference, the mean score across windows is mapped through the calibrator to produce the final confidence.
+The fitted calibrator is saved as `calibrator.joblib` and loaded at API startup. At inference, its synthetic probability is recentered so the configured `decision_threshold=0.15` maps to response boundary 0.5 while preserving score ranking.
 
 ## Channel Separation
 

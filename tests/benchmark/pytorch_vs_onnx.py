@@ -37,8 +37,8 @@ BENCH_RUNS = 15
 AUDIO_DURATIONS_S = [2, 5, 10, 20]
 SAMPLE_RATE = 8000
 TARGET_SR = 16000
-MAX_WINDOWS = 2
-WINDOW_SAMPLES = 64000  # 4s @ 16kHz
+MAX_WINDOWS = 1
+WINDOW_SAMPLES = 48000  # 3s @ 16kHz
 HOP = WINDOW_SAMPLES // 2
 
 
@@ -58,7 +58,7 @@ def make_stereo_wav_bytes(duration_s: float, sr: int = SAMPLE_RATE) -> bytes:
 
 
 def make_windows(duration_s: float) -> list[torch.Tensor]:
-    """Create synthetic 4s windows at 16kHz."""
+    """Create synthetic 3s windows at 16kHz."""
     n_samples_16k = int(duration_s * TARGET_SR)
     if n_samples_16k < WINDOW_SAMPLES:
         pad = torch.randn(WINDOW_SAMPLES)

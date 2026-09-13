@@ -14,8 +14,8 @@ import numpy as np
 import soundfile as sf
 import torch
 
-from pipeline.bundle import bundle  # pyright: ignore[reportMissingImports]
 from config import get_settings
+from pipeline.bundle import bundle  # pyright: ignore[reportMissingImports]
 from schemas import DetectResponse
 
 logger = logging.getLogger(__name__)
@@ -26,24 +26,64 @@ class AudioError(ValueError):
 
 
 def sample_windows(windows: list[torch.Tensor], max_windows: int) -> list[torch.Tensor]:
-    """Cap window count to ``max_windows`` evenly spaced windows.
+    """Cap window count while retaining useful caller speech.
 
-    Long calls yield many 50%-overlap windows; scoring all of them is the
-    dominant latency cost. Averaging a small set of evenly spaced windows
-    preserves the aggregate signal at a fraction of the compute.
+    A single-window request selects highest-energy caller window instead of
+    first window, which may contain silence. Multi-window requests preserve
+    evenly spaced sampling for call coverage.
 
     Args:
         windows: Full window list from :func:`window_waveform`.
         max_windows: Maximum windows to keep. Short calls keep all.
 
     Returns:
-        At most ``max_windows`` windows, evenly spaced across the call.
+        At most ``max_windows`` selected windows.
+
+    Raises:
+        ValueError: If max_windows is less than one.
     """
+    if max_windows < 1:
+        raise ValueError("max_windows must be at least 1")
+
     n = len(windows)
     if n <= max_windows:
         return windows
+    if max_windows == 1:
+        try:
+            energies = torch.stack([window.square().mean() for window in windows])
+            selected_index = int(torch.argmax(energies).item())
+        except (RuntimeError, TypeError, ValueError) as exc:
+            raise ValueError("Could not select highest-energy window") from exc
+        return [windows[selected_index]]
+
     idx = np.linspace(0, n - 1, max_windows).round().astype(int)
     return [windows[i] for i in idx]
+
+
+def recenter_probability(probability: float, threshold: float) -> float:
+    """Map selected decision threshold to probability 0.5.
+
+    Monotonic odds recentering preserves ranking while allowing class-confidence
+    output to retain existing semantics.
+
+    Args:
+        probability: Calibrated synthetic probability.
+        threshold: Synthetic decision threshold in original probability space.
+
+    Returns:
+        Recentered synthetic probability.
+
+    Raises:
+        ValueError: If probability or threshold falls outside valid bounds.
+    """
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError("probability must be between 0 and 1")
+    if not 0.0 < threshold < 1.0:
+        raise ValueError("decision_threshold must be between 0 and 1")
+
+    numerator = probability * (1.0 - threshold)
+    denominator = numerator + (1.0 - probability) * threshold
+    return numerator / denominator
 
 
 def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
@@ -81,7 +121,7 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
     assert bundle.resampler is not None
     waveform = bundle.resampler.resample_tensor(caller, source_sr=sr)
 
-    # Window into 4s chunks (50% overlap)
+    # Window into 3s inference chunks (50% overlap)
     from audio.windowing import window_waveform  # pyright: ignore[reportMissingImports]
 
     windows = window_waveform(waveform)
@@ -108,7 +148,11 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
     try:
         mean_score = float(scores.mean())
         assert bundle.calibrator is not None
-        confidence = float(bundle.calibrator.predict([mean_score])[0])
+        calibrated_probability = float(bundle.calibrator.predict([mean_score])[0])
+        synthetic_probability = recenter_probability(
+            calibrated_probability,
+            settings.decision_threshold,
+        )
     except Exception as exc:
         raise AudioError(f"Scoring failed: {exc}") from exc
     t_end = time.perf_counter()
@@ -128,7 +172,8 @@ def classify_wav_bytes(wav_bytes: bytes) -> DetectResponse:
         duration_s,
     )
     return DetectResponse(
-        is_synthetic=confidence >= 0.5, confidence=round(max(confidence, 1 - confidence), 4)
+        is_synthetic=synthetic_probability >= 0.5,
+        confidence=round(max(synthetic_probability, 1 - synthetic_probability), 4),
     )
 
 

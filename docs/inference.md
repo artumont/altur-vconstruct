@@ -8,13 +8,13 @@ Step-by-step breakdown of what happens when `POST /detect` is called.
 2. **Read** — WAV bytes -> stereo float32 array (`soundfile.read`)
 3. **Extract channel** — take column 0 (caller) from stereo array -> mono tensor
 4. **Resample** — 8 kHz -> 16 kHz via `torchaudio.transforms.Resample`
-5. **Window** — chop into 4s chunks (64000 samples) with 50% overlap (hop = 32000)
-6. **Sample** — cap at `max_windows=2` evenly-spaced windows (`np.linspace`)
-7. **Embed** — batch through ONNX WavLM-large -> mean-pool over time -> (B, 1024)
-8. **Classify** — each window through MLP -> (B,) probabilities
-9. **Aggregate** — mean across windows -> single score
-10. **Calibrate** — isotonic regressor -> final confidence
-11. **Threshold** — confidence >= 0.5 -> `is_synthetic` boolean
+5. **Window** — chop into 3s chunks (48000 samples) with 50% overlap (hop = 24000)
+6. **Sample** — select highest-energy caller window (`max_windows=1`)
+7. **Embed** — run ONNX WavLM-large -> mean-pool over time -> (1, 1024)
+8. **Classify** — run window embedding through MLP -> synthetic score
+9. **Calibrate** — isotonic regressor -> calibrated synthetic probability
+10. **Recenter** — map `decision_threshold=0.15` to response boundary 0.5
+11. **Threshold** — recentered probability >= 0.5 -> `is_synthetic` boolean
 
 ## Key Functions
 
@@ -33,14 +33,15 @@ Step-by-step breakdown of what happens when `POST /detect` is called.
 
 The dominant cost is WavLM extraction (step 7). Everything else is negligible.
 
-With `max_windows=2`:
+With `max_windows=1`, every non-empty call performs one WavLM extraction.
+The selected window has highest caller-channel energy, avoiding silence while
+keeping encoder cost independent of call duration. ONNX Runtime uses four
+intra-op threads and disables idle thread spinning.
 
-- 2s audio: 1 window -> ~1 extraction
-- 5s audio: 2 windows -> ~2 extractions
-- 20s audio: 2 windows -> ~2 extractions (capped)
-- 180s audio: 2 windows -> ~2 extractions (capped)
-
-ONNX Runtime with 6 intra-op threads handles each window in ~100-200ms on CPU.
+Latency remains hardware-dependent. On an AMD Ryzen 5 PRO 4650U running on
+battery, a sustained 213-call augmented-validation run measured 0.999s mean,
+0.795s median, and 1.637s p95 HTTP latency. Internal processing averaged
+0.957s; thermal throttling caused five calls to exceed 2s.
 
 ## Benchmarking
 
@@ -60,6 +61,6 @@ Tests extraction and full-pipeline latency across 2s, 5s, 10s, and 20s audio cli
 
 ### Interpreting results
 
-- Extract time scales with window count (capped at 2)
+- Extract time is capped at one selected window
 - Full pipeline adds ~5-10ms for resampling + classification
 - p95 matters more than mean for judge scoring (worst-case latency)

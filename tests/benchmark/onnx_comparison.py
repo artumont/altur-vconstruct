@@ -36,7 +36,7 @@ WARMUP_RUNS = 3
 BENCH_RUNS = 15
 AUDIO_DURATIONS_S = [2, 5, 10, 20]
 SAMPLE_RATE = 8000
-MAX_WINDOWS = 2
+MAX_WINDOWS = 1
 
 
 def make_stereo_wav_bytes(duration_s: float, sr: int = SAMPLE_RATE) -> bytes:

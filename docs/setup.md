@@ -116,7 +116,9 @@ Reports per-stage latency across audio durations.
 | ---------- | --------- | ------------- |
 | `device` | `cuda` / `cpu` | Inference device |
 | `dtype` | `float16` / `float32` | Model precision |
-| `max_windows` | `2` | Max windows scored per call |
+| `max_windows` | `1` | Highest-energy caller windows scored per call |
+| `onnx_intra_threads` | `4` | ONNX intra-op CPU threads |
+| `decision_threshold` | `0.15` | Synthetic probability decision threshold |
 | `extract_batch_size` | `16` | Batch size for WavLM extraction |
 | `model_path` | auto-resolved | Path to `best_model.pt` |
 | `calibrator_path` | auto-resolved | Path to `calibrator.joblib` |
@@ -132,9 +134,9 @@ Model path resolution order:
 
 ```
 apps/train/
-  audio/              # WAV files (gitignored, unzip from release)
-    <anon_id>.wav
   data/
+    audio/            # WAV files (gitignored, unzip from release)
+      <anon_id>.wav
     manifest.csv      # anon_id, label, split, duration_s
     turns/            # Per-call JSON with speech segments
   checkpoints/

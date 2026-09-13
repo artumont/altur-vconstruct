@@ -19,7 +19,7 @@ Requires both `torch` + `transformers` (PyTorch path) and `onnxruntime` (ONNX pa
 
 - **PyTorch**: `WavLMModel.from_pretrained()` via HuggingFace transformers, CPU inference
 - **ONNX**: `onnxruntime.InferenceSession` with graph optimization, 6 intra-op threads
-- Both extract 1024-dim embeddings from 4s audio windows (mean-pooled over time)
+- Both extract 1024-dim embeddings from 3s inference windows (mean-pooled over time)
 - Identical input: same synthetic WAV windows, same number of windows per duration
 
 ### Expected Results
@@ -43,7 +43,7 @@ Key observations:
 
 - ONNX load time is faster (~2s vs ~5s for PyTorch)
 - Speedup is consistent across durations (2.0-2.2x)
-- With `max_windows=2`, longer audio doesn't increase extraction time (capped)
+- With `max_windows=1`, longer audio doesn't increase extraction time (capped)
 - PyTorch benefits more from batching; ONNX wins on single-batch latency
 
 ### Why This Matters
@@ -53,7 +53,7 @@ The challenge scores **latency**. A 3-minute call with all windows (~45) would t
 - PyTorch: ~8s extraction
 - ONNX: ~4s extraction
 
-With window sampling (max_windows=2), both drop to ~2 extractions. But ONNX still wins on per-extraction time, which compounds across the judge's test set.
+With window sampling (`max_windows=1`), both drop to one extraction. The selected window uses highest caller energy to avoid spending the only extraction on silence.
 
 ## Per-Stage Pipeline Breakdown
 
@@ -72,7 +72,7 @@ uv run python -m tests.benchmark.inference_latency
 | ------- | ----------- | --------------- |
 | 1_decode_wav | base64 decode + soundfile read | <1ms |
 | 2_resample | 8kHz -> 16kHz via torchaudio | <1ms |
-| 3_window | chop into 4s chunks | <1ms |
+| 3_window | chop into 3s chunks | <1ms |
 | 4_sample_windows | cap to max_windows | <0.1ms |
 | 5_wavlm_extract | ONNX WavLM embedding | ~85-170ms |
 | 6_mlp_classify | 3-layer MLP forward | <1ms |
@@ -82,16 +82,7 @@ uv run python -m tests.benchmark.inference_latency
 
 ### End-to-End Latency
 
-With `max_windows=2` and ONNX Runtime:
-
-| Audio Duration | E2E Latency (p95) | Throughput |
-|----------------|-------------------|------------|
-| 2s             | ~100ms            | ~10 req/s  |
-| 5s             | ~180ms            | ~5 req/s   |
-| 10s            | ~180ms            | ~5 req/s   |
-| 20s            | ~180ms            | ~5 req/s   |
-
-Throughput is single-concurrent. With FastAPI async + multiple workers, effective throughput scales linearly.
+With `max_windows=1`, latency is independent of call duration after decode and resampling. WavLM CPU latency varies heavily by hardware and sustained thermal load. Run the benchmark on deployment hardware; do not extrapolate from development machines. Multiple API workers contend for CPU and do not provide linear throughput for this CPU-bound model.
 
 ## ONNX Comparison (Single Backend)
 
@@ -117,8 +108,8 @@ Reports extraction-only and full-pipeline timing across audio durations. Useful 
 | Audio durations | 2s, 5s, 10s, 20s | Simulates short to long calls |
 | Input sample rate | 8 kHz | Telephony standard |
 | Target sample rate | 16 kHz | WavLM requirement |
-| Max windows | 2 | Latency optimization |
-| ONNX threads | 6 | intra_op_num_threads |
+| Max windows | 1 | Highest-energy caller window |
+| ONNX threads | 4 | intra-op threads; idle spinning disabled |
 
 ### Interpreting Results
 

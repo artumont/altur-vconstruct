@@ -2,15 +2,15 @@
 
 Key architectural and engineering choices made during development, with rationale.
 
-## 1. Window Sampling for Latency (4 windows -> 2)
+## 1. High-Energy Window Sampling for Latency
 
-**Problem**: A 3-minute call produces ~45 overlapping windows at 50% hop. Scoring all of them is the dominant latency cost — WavLM extraction is expensive per window.
+**Problem**: A 3-minute call produces ~119 overlapping 3-second inference windows at 50% hop. Scoring all of them is the dominant latency cost because WavLM extraction is expensive per window.
 
-**Decision**: Cap at `max_windows=2` evenly-spaced windows at inference. Training uses all windows.
+**Decision**: Score one highest-energy caller window at inference (`max_windows=1`). Training continues using all 4-second windows.
 
-**Rationale**: A human caller sounds human in every segment. A synthetic caller sounds synthetic in every segment. Two representative windows preserve the aggregate signal at a fraction of the compute. `np.linspace` picks evenly-spaced indices across the full call duration.
+**Rationale**: One window cuts encoder work to a fixed cost independent of call duration. Selecting by caller-channel energy avoids greetings or silence consuming the only extraction. Mean pooling keeps the 1024-dimensional classifier interface unchanged when inference windows shrink from four to three seconds.
 
-**Impact**: ~20x extraction speedup on long calls. Short calls (< 4s) keep their single padded window. The `sample_windows()` function handles the capping in `apps/api/src/pipeline/service.py`.
+**Impact**: On 213 augmented validation calls, this policy retained 99.53% accuracy and measured 0.999s mean HTTP latency on an unplugged Ryzen 5 PRO 4650U. Short calls under three seconds use one padded window. `sample_windows()` implements selection in `apps/api/src/pipeline/service.py`.
 
 ## 2. ONNX Runtime Instead of PyTorch for Inference
 

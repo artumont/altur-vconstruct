@@ -32,8 +32,8 @@ Audio: 8 kHz telephony, 16-bit PCM, stereo. Per-call turn JSONs in `data/turns/`
 ```
 Audio (8 kHz stereo WAV)
   -> Resample caller channel to 16 kHz
-  -> Window into 4s chunks (50% overlap)
-  -> Sample max 2 windows (latency optimization)
+  -> Window into 3s chunks (50% overlap)
+  -> Select highest-energy caller window (latency optimization)
   -> WavLM-large (frozen) -> 1024-dim embeddings
   -> MLP classifier -> isotonic calibration
   -> { is_synthetic, confidence }

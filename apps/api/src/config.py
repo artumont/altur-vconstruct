@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     dtype: str = "float16" if torch.cuda.is_available() else "float32"
     extract_batch_size: int = 16
-    max_windows: int = 2  # cap on windows scored per call (evenly spaced)
+    onnx_intra_threads: int = 4  # physical-core sweet spot; avoid SMT contention
+    max_windows: int = 1  # one high-energy caller window for low latency
+    decision_threshold: float = 0.15  # recentered to 0.5 before response
 
     def _resolve(self, name: str, value: Path | None) -> Path:
         """Pick the first existing candidate path, or fall back to the default.

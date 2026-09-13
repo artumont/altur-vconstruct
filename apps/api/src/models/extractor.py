@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 1024
 SAMPLE_RATE = 16000
-WINDOW_SAMPLES = 64000  # 4s @ 16 kHz
+WINDOW_SAMPLES = 48000  # 3s @ 16 kHz
 
 
 def _default_onnx_path() -> Path:
@@ -58,14 +58,14 @@ class ONNXSSLEvaluator:
         self,
         device: str | torch.device = "cpu",
         model_path: str | Path | None = None,
-        intra_threads: int = 6,
+        intra_threads: int = 4,
     ) -> None:
         """Load WavLM ONNX model.
 
         Args:
             device: Hint for placement. ONNX provider auto-detected.
             model_path: Path to wavlm-large.onnx. Auto-detected if None.
-            intra_threads: ORT intra-op parallelism. 6 is sweet-spot on 12-core.
+            intra_threads: ORT intra-op parallelism. Four avoids SMT contention.
         """
         self.model_path = Path(model_path) if model_path else _default_onnx_path()
 
@@ -73,6 +73,8 @@ class ONNXSSLEvaluator:
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         so.intra_op_num_threads = intra_threads
         so.inter_op_num_threads = 1  # single batch, no inter-op needed
+        so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        so.add_session_config_entry("session.inter_op.allow_spinning", "0")
 
         # Try GPU first, fall back to CPU
         providers = []
@@ -91,10 +93,10 @@ class ONNXSSLEvaluator:
 
     @torch.no_grad()
     def extract(self, waveform: torch.Tensor) -> torch.Tensor:
-        """Extract embedding from a single 4s window.
+        """Extract embedding from a single 3s window.
 
         Args:
-            waveform: 1-D tensor of shape (64000,) at 16 kHz.
+            waveform: 1-D tensor of shape (48000,) at 16 kHz.
 
         Returns:
             1-D tensor of shape (1024,).
@@ -109,10 +111,10 @@ class ONNXSSLEvaluator:
 
     @torch.no_grad()
     def extract_batch(self, waveforms: torch.Tensor) -> torch.Tensor:
-        """Extract embeddings from a batch of 4s windows.
+        """Extract embeddings from a batch of 3s windows.
 
         Args:
-            waveforms: 2-D tensor of shape (B, 64000) at 16 kHz.
+            waveforms: 2-D tensor of shape (B, 48000) at 16 kHz.
 
         Returns:
             2-D tensor of shape (B, 1024).

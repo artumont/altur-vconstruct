@@ -40,7 +40,10 @@ class ModelBundle:
         settings = get_settings()
 
         self.resampler = Resampler(source_sr=8000, target_sr=16000)
-        self.ssl = ONNXSSLEvaluator(device=settings.device)
+        self.ssl = ONNXSSLEvaluator(
+            device=settings.device,
+            intra_threads=settings.onnx_intra_threads,
+        )
 
         classifier = SpoofClassifier(input_dim=1024)
         model_path = settings.resolved_model_path
