@@ -2,7 +2,7 @@
 
 data:
   manifest_path: data/manifest.csv
-  audio_dir: audio
+  audio_dir: data/audio
   turns_dir: data/turns
   cache_dir: checkpoints/embeddings_cache
   augmented:

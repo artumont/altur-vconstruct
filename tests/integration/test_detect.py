@@ -23,7 +23,7 @@ TIMEOUT = float(os.getenv("TEST_TIMEOUT", "60"))
 
 # Resolve paths relative to project root (altur-vconstruct/)
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-AUDIO_DIR = Path(os.getenv("AUDIO_DIR", str(_PROJECT_ROOT / "apps" / "train" / "audio")))
+AUDIO_DIR = Path(os.getenv("AUDIO_DIR", str(_PROJECT_ROOT / "apps" / "train" / "data" / "audio")))
 MANIFEST = Path(os.getenv("MANIFEST", str(_PROJECT_ROOT / "apps" / "train" / "data" / "manifest.csv")))
 
 
