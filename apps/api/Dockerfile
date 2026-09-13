@@ -35,13 +35,7 @@ torch.onnx.export( \
 print('Done') \
 "
 
-# Swap to GPU packages after ONNX export
-RUN uv pip install --index-url https://download.pytorch.org/whl/cu126 torch torchaudio
-RUN uv pip uninstall -y onnxruntime && uv pip install onnxruntime-gpu
-
-FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04 AS runtime
-
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && rm -rf /var/lib/apt/lists/*
+FROM python:3.12-slim
 
 RUN addgroup --system app && adduser --system --ingroup app app
 
@@ -56,8 +50,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app/src:/app/train"
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 USER app
 
