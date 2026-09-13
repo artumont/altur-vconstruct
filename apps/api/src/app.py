@@ -11,7 +11,6 @@ channel 0 = caller (classified), channel 1 = agent (context).
 from __future__ import annotations
 
 import logging
-import os
 
 from fastapi import FastAPI, HTTPException  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]
@@ -24,12 +23,10 @@ from schemas import DetectRequest, DetectResponse, ErrorResponse
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="altur-vconstruct", version="0.1.0")
-cors_origins = [
-    origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
