@@ -11,10 +11,11 @@ Detailed documentation for the voice anti-spoofing system.
 | [inference.md](inference.md) | Step-by-step inference pipeline, latency profile, benchmarking |
 | [setup.md](setup.md) | Training, API, Docker, testing, env vars, troubleshooting |
 | [benchmarks.md](benchmarks.md) | PyTorch vs ONNX comparison, per-stage latency, benchmark scripts |
-| [entregables.md](entregables.md) | Challenge deliverables, scoring criteria, checklist |
-| [arquitectura.md](arquitectura.md) | Initial architecture exploration (Spanish, early planning) |
+| [devpost.md](devpost.md) | Hackathon write-up: problem, build, learnings |
 
 ## Quick Links
 
-- **Root README**: [../README.md](../README.md) — project overview
+- **Root README**: [../README.md](../README.md) — project overview and measured results
 - **Challenge repo**: altur-vconstruct
+- **Environment variables**: [setup.md](setup.md#environment-variables)
+- **Shipped model metrics**: [../README.md](../README.md#measured-results)

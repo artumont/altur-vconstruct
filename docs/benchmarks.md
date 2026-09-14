@@ -9,16 +9,19 @@ Head-to-head comparison of WavLM-large embedding extraction.
 ### How to Run
 
 ```bash
-cd apps/api
-uv run python -m tests.benchmark.pytorch_vs_onnx
+# from the repo root, with an environment that has both backends:
+#   transformers + torch  -> apps/train
+#   onnxruntime           -> apps/api
+uv run --project apps/train --with onnxruntime python -m tests.benchmark.pytorch_vs_onnx
 ```
 
-Requires both `torch` + `transformers` (PyTorch path) and `onnxruntime` (ONNX path). Downloads WavLM-large (~1.2GB) on first run.
+Requires `wavlm-large.onnx` (built by the API image, not committed) — see
+[setup.md](setup.md#benchmarks) for the export command.
 
 ### What It Measures
 
 - **PyTorch**: `WavLMModel.from_pretrained()` via HuggingFace transformers, CPU inference
-- **ONNX**: `onnxruntime.InferenceSession` with graph optimization, 6 intra-op threads
+- **ONNX**: `onnxruntime.InferenceSession` with graph optimization, 6 intra-op threads (the script pins 6 explicitly; production uses 4)
 - Both extract 1024-dim embeddings from 3s inference windows (mean-pooled over time)
 - Identical input: same synthetic WAV windows, same number of windows per duration
 
@@ -30,30 +33,26 @@ ONNX Runtime consistently outperforms PyTorch for single-batch CPU inference due
 - No Python GIL overhead in the inference hot path
 - Optimized memory layout for CPU execution
 
-| Duration | Windows | PyTorch (mean) | ONNX (mean) | Speedup |
-|----------|---------|----------------|-------------|---------|
-| 2s       | 1       | ~180ms         | ~90ms       | ~2.0x   |
-| 5s       | 2       | ~350ms         | ~170ms      | ~2.1x   |
-| 10s      | 2       | ~350ms         | ~170ms      | ~2.1x   |
-| 20s      | 2       | ~350ms         | ~170ms      | ~2.1x   |
-
-*Results vary by CPU. Numbers above are representative for a 12-core machine.*
+Development measurements showed a consistent **2.0-2.2x per-window speedup** on
+CPU, with identical mean-pooled 1024-dim embeddings either way. Absolute latency
+is hardware-dependent, so run the script on the deployment machine instead of
+copying numbers; the ONNX side of the production pipeline is measured below.
 
 Key observations:
 
-- ONNX load time is faster (~2s vs ~5s for PyTorch)
-- Speedup is consistent across durations (2.0-2.2x)
-- With `max_windows=1`, longer audio doesn't increase extraction time (capped)
+- With `max_windows=1`, longer audio does not increase extraction time (capped)
 - PyTorch benefits more from batching; ONNX wins on single-batch latency
+- ONNX session creation is fast (~1-3 s) and needs no `transformers` at runtime
 
 ### Why This Matters
 
-The challenge scores **latency**. A 3-minute call with all windows (~45) would take:
+The challenge scores **latency**. A 3-minute call yields ~119 overlapping
+3-second windows at 50% hop. At the ~170 ms per window measured below, scoring all
+of them is roughly 20 s of encoder work for one call.
 
-- PyTorch: ~8s extraction
-- ONNX: ~4s extraction
-
-With window sampling (`max_windows=1`), both drop to one extraction. The selected window uses highest caller energy to avoid spending the only extraction on silence.
+With `max_windows=1`, that drops to a single highest-energy caller window, i.e.
+~99% less encoder work. The selected window avoids silence so the only extraction
+is never wasted, and pipeline cost becomes independent of call length.
 
 ## Per-Stage Pipeline Breakdown
 
@@ -62,40 +61,67 @@ Detailed timing for each pipeline stage.
 ### How to Run
 
 ```bash
-cd apps/api
-uv run python -m tests.benchmark.inference_latency
+# from the repo root, with the API environment active (provides onnxruntime)
+source apps/api/.venv/bin/activate
+python -m tests.benchmark.inference_latency
 ```
 
 ### Pipeline Stages
 
-| Stage | Operation | Expected Time |
+| Stage | Operation | Measured (mean) |
 | ------- | ----------- | --------------- |
-| 1_decode_wav | base64 decode + soundfile read | <1ms |
-| 2_resample | 8kHz -> 16kHz via torchaudio | <1ms |
-| 3_window | chop into 3s chunks | <1ms |
-| 4_sample_windows | cap to max_windows | <0.1ms |
-| 5_wavlm_extract | ONNX WavLM embedding | ~85-170ms |
-| 6_mlp_classify | 3-layer MLP forward | <1ms |
-| 7_calibrate | isotonic regression predict | <0.1ms |
+| 1_decode_wav | base64 decode + soundfile read | 0.3-0.6ms |
+| 2_resample | 8kHz -> 16kHz via torchaudio | 0.3-1.5ms |
+| 3_window | chop into 3s chunks | <0.1ms |
+| 4_sample_windows | select highest-energy window | 0.0-0.2ms |
+| 5_wavlm_extract | ONNX WavLM embedding | 165-173ms |
+| 6_mlp_classify | 3-layer MLP forward | ~0.3ms |
+| 7_calibrate | isotonic regression predict | ~0.3ms |
 
-**Bottleneck**: Stage 5 (WavLM extraction) accounts for >95% of pipeline time.
+**Bottleneck**: Stage 5 (WavLM extraction) is always ~90% of end-to-end `/detect`
+latency (99% of in-process stage time, where transport and container overhead are
+not counted). Optimizing anything else is noise until the encoder gets cheaper.
 
 ### End-to-End Latency
 
-With `max_windows=1`, latency is independent of call duration after decode and resampling. WavLM CPU latency varies heavily by hardware and sustained thermal load. Run the benchmark on deployment hardware; do not extrapolate from development machines. Multiple API workers contend for CPU and do not provide linear throughput for this CPU-bound model.
+Measured on an AMD Ryzen 5 9600X (6C/12T, CPU-only, 4 ONNX intra-op threads,
+2 warmup + 10 measured runs per duration):
+
+| Audio | Raw windows | Scored | E2E mean | E2E median | E2E p95 | Throughput |
+| ----- | ----------- | ------ | -------- | ---------- | ------- | ---------- |
+| 2s | 1 | 1 | 174ms | 173ms | 190ms | ~5.8 req/s |
+| 5s | 2 | 1 | 202ms | 202ms | 234ms | ~5.0 req/s |
+| 10s | 5 | 1 | 240ms | 234ms | 283ms | ~4.2 req/s |
+| 20s | 12 | 1 | 194ms | 193ms | 236ms | ~5.2 req/s |
+
+Throughput is single-concurrent. The model is CPU-bound, so additional workers
+contend for the same cores instead of scaling linearly.
+
+These are in-process stage numbers on a fast desktop CPU. Against the deployed
+endpoint the same one-window pipeline averages **~0.5-0.6 s per call** (the earlier
+all-window pipeline without thread tuning averaged **~1.0-1.2 s**), with container
+and transport overhead plus sustained thermal load accounting for the difference.
+Run the benchmark on the deployment machine before quoting a latency number; do not
+extrapolate from a dev box.
 
 ## ONNX Comparison (Single Backend)
 
-Per-pipeline timing using only the ONNX backend (production configuration).
+Per-pipeline timing using only the ONNX backend, with the higher thread count the
+comparison scripts pin.
 
 ### How to Run
 
 ```bash
-cd apps/api
-uv run python -m tests.benchmark.onnx_comparison
+# from the repo root, with the API environment active (provides onnxruntime)
+source apps/api/.venv/bin/activate
+python -m tests.benchmark.onnx_comparison
 ```
 
-Reports extraction-only and full-pipeline timing across audio durations. Useful for profiling the ONNX path in isolation.
+Reports extraction-only and full-pipeline timing across audio durations (3 warmup +
+15 measured runs per duration). On the same 6-core machine: extraction 165-173 ms
+mean (p95 175-191 ms) and full pipeline 169-173 ms mean (p95 185-202 ms) for 2-20 s
+calls — within noise of the per-stage numbers above, confirming that nothing
+outside WavLM extraction influences latency.
 
 ## Configuration
 
@@ -109,7 +135,7 @@ Reports extraction-only and full-pipeline timing across audio durations. Useful 
 | Input sample rate | 8 kHz | Telephony standard |
 | Target sample rate | 16 kHz | WavLM requirement |
 | Max windows | 1 | Highest-energy caller window |
-| ONNX threads | 4 | intra-op threads; idle spinning disabled |
+| ONNX threads | 4 | `inference_latency.py` reads the production config; the two comparison scripts pin 6 |
 
 ### Interpreting Results
 

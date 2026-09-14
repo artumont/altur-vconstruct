@@ -56,7 +56,7 @@ Linear(256 -> 128)  -> BatchNorm1d -> ReLU -> Dropout(0.3)
 Linear(128 -> 1)    -> Sigmoid
 ```
 
-~133K parameters. Trained with BCE loss, AdamW optimizer (lr=1e-4, weight_decay=1e-4), cosine annealing schedule. Early stopping on EER with patience=7.
+~296K parameters (Linear(1024,256) is 262,400 of them). Trained with BCE loss, AdamW optimizer (lr=1e-4, weight_decay=1e-4), cosine annealing schedule. Early stopping on EER with patience=7.
 
 **Why MLP over complex architectures (AASIST, conformers):**
 
@@ -71,6 +71,50 @@ Raw sigmoid outputs are not reliable probabilities. The challenge uses `confiden
 We fit `sklearn.IsotonicRegression` on validation-set predictions. Isotonic is non-parametric (no sigmoid shape assumption) and handles the bimodal score distribution better than Platt scaling.
 
 The fitted calibrator is saved as `calibrator.joblib` and loaded at API startup. At inference, its synthetic probability is recentered so the configured `decision_threshold=0.15` maps to response boundary 0.5 while preserving score ranking.
+
+## Training Pipeline
+
+Two rounds, both training only the MLP head on frozen WavLM embeddings
+(`apps/train/src/train.py`):
+
+1. **Baseline** (`configs/baseline.yml`) — every 4-second window of the train
+   split. AdamW (lr `1e-4`, weight decay `1e-4`), batch 64, cosine annealing,
+   early stopping on validation EER with patience 7, up to 30 epochs.
+2. **Round two** (`configs/round2.yml`, optional) — fine-tune the baseline
+   checkpoint at lr `1e-5` for up to 15 epochs (patience 4) on the baseline
+   train embeddings **plus** `train_augmented.pt`.
+
+Augmentation lives in `apps/dataset/src/dataset/augment.py` and is deterministic
+for a fixed seed (`make round2` uses seed 2026 and 3 variants per train call,
+i.e. 846 variants from the 282 train calls, taking the training pool to ~800+
+augmented calls). Each generated variant applies one telephony-style family:
+caller/agent latency shift (100-1500 ms), call-level gain (-5..+5 dB) with
+18-30 dB SNR noise, or packet-loss dropout (2-8 gaps) plus 0.97-1.03x clock-rate
+variation. Labels are never changed, and the validation split is never augmented
+for training.
+
+## Shipped Checkpoint
+
+`apps/train/checkpoints/best_model.pt` + `calibrator.joblib` are what the API
+loads. Scored read-only over the cached validation windows (all 4-second training
+windows, 5,199 windows from the 71 held-out val calls):
+
+| Metric | Value |
+| ------ | ----- |
+| EER, raw sigmoid | 0.40% |
+| EER, post-isotonic | 0.44% |
+| Window accuracy at recentered threshold | 99.5% (5,174 / 5,199) |
+| Brier, post-isotonic | 0.0039 |
+
+The endpoint scores one 3-second high-energy window per call, so these per-window
+figures are a proxy for the judge metric rather than the exact number. Measured
+cost of that single window on an AMD Ryzen 5 9600X (6C/12T, CPU-only, 4 ONNX
+intra-op threads): WavLM extraction ~170 ms mean and always ~90% of the
+end-to-end latency budget (99% of in-process pipeline
+time), 0.17-0.24 s end-to-end for 2-20 s calls, p95 <= 0.28 s. On deployment
+hardware the endpoint averages ~0.5-0.6 s per call, down from ~1.0-1.2 s for the
+earlier pipeline that scored every window without thread tuning. See
+[benchmarks.md](benchmarks.md) for the full breakdown.
 
 ## Channel Separation
 
@@ -87,8 +131,9 @@ Channel 1 is not currently fed to the classifier. The architecture classifies th
 
 WavLM inference is the bottleneck during training (~30 min for 353 calls on GPU). Embeddings are extracted once and cached:
 
-- `checkpoints/embeddings_cache/train.pt` — (N_train, 1024) tensor + labels
-- `checkpoints/embeddings_cache/val.pt` — (N_val, 1024) tensor + labels
+- `checkpoints/embeddings_cache/train.pt` — (20,378, 1024) tensor + labels
+- `checkpoints/embeddings_cache/val.pt` — (5,199, 1024) tensor + labels
+- `checkpoints/embeddings_cache/train_augmented.pt` — added when round two runs
 
 Subsequent training runs load from cache in seconds. The `pre_extract_embeddings()` function skips already-cached splits.
 

@@ -15,6 +15,13 @@ Step-by-step breakdown of what happens when `POST /detect` is called.
 9. **Calibrate** — isotonic regressor -> calibrated synthetic probability
 10. **Recenter** — map `decision_threshold=0.15` to response boundary 0.5
 11. **Threshold** — recentered probability >= 0.5 -> `is_synthetic` boolean
+12. **Confidence** — `max(probability, 1 - probability)` rounded to 4 decimals
+
+The response separates the decision from its magnitude: `is_synthetic` comes from
+the recentered probability crossing 0.5, while `confidence` is the distance to the
+nearest decision (always >= 0.5), i.e. confidence in whichever class was returned.
+A tie-break-heavy judge gets a number that is high only when the calibrated
+probability is close to 0 or 1.
 
 ## Key Functions
 
@@ -33,26 +40,51 @@ Step-by-step breakdown of what happens when `POST /detect` is called.
 
 The dominant cost is WavLM extraction (step 7). Everything else is negligible.
 
-With `max_windows=1`, every non-empty call performs one WavLM extraction.
-The selected window has highest caller-channel energy, avoiding silence while
-keeping encoder cost independent of call duration. ONNX Runtime uses four
-intra-op threads and disables idle thread spinning.
+With `max_windows=1`, every non-empty call performs exactly one WavLM extraction.
+The selected window has the highest caller-channel energy, which avoids spending
+the only extraction on silence, and keeps encoder cost independent of call
+duration. ONNX Runtime uses four intra-op threads and disables idle thread
+spinning.
 
-Latency remains hardware-dependent. On an AMD Ryzen 5 PRO 4650U running on
-battery, a sustained 213-call augmented-validation run measured 0.999s mean,
-0.795s median, and 1.637s p95 HTTP latency. Internal processing averaged
-0.957s; thermal throttling caused five calls to exceed 2s.
+Measured with `tests/benchmark/inference_latency.py` on an AMD Ryzen 5 9600X
+(6C/12T, CPU-only, 4 intra-op threads):
+
+| Audio | Raw windows | Scored | E2E mean | E2E p95 | Throughput |
+| ----- | ----------- | ------ | -------- | ------- | ---------- |
+| 2 s | 1 | 1 | 174 ms | 190 ms | ~5.8 req/s |
+| 5 s | 2 | 1 | 202 ms | 234 ms | ~5.0 req/s |
+| 10 s | 5 | 1 | 240 ms | 283 ms | ~4.2 req/s |
+| 20 s | 12 | 1 | 194 ms | 236 ms | ~5.2 req/s |
+
+WavLM extraction is ~170 ms of that and consistently ~90% of the end-to-end
+`/detect` latency budget (99% of in-process stage time, where transport is not
+counted); every other stage is under 2 ms.
+Throughput is single-concurrent — the model is CPU-bound, so more workers contend
+for the same cores instead of scaling linearly.
+
+Hardware state matters more than the weights. On deployment hardware `/detect`
+averages **~0.5-0.6 s per call**; the earlier pipeline that scored every window
+without thread tuning averaged **~1.0-1.2 s**, and a sustained 213-call HTTP run on
+a throttled laptop on battery measured 0.999 s mean / 0.795 s median /
+1.637 s p95. Re-run the benchmark on the deployment machine before quoting a
+latency number.
 
 ## Benchmarking
 
 Run the benchmark suite:
 
 ```bash
-cd apps/api
-uv run python -m tests.benchmark.onnx_comparison
+# from the repo root, with the API environment active (provides onnxruntime)
+source apps/api/.venv/bin/activate
+python -m tests.benchmark.onnx_comparison
+python -m tests.benchmark.inference_latency
 ```
 
-Tests extraction and full-pipeline latency across 2s, 5s, 10s, and 20s audio clips. Reports mean, median, p95 timing.
+Tests extraction and full-pipeline latency across 2s, 5s, 10s, and 20s audio
+clips (2 warmup runs, 10 measured). Reports mean, median, p95 and p99 timing.
+Both scripts need `wavlm-large.onnx`, which the API image builds during
+`docker build` and the repo does not commit — see
+[setup.md](setup.md#benchmarks) for the export command.
 
 ### What it measures
 
@@ -62,5 +94,6 @@ Tests extraction and full-pipeline latency across 2s, 5s, 10s, and 20s audio cli
 ### Interpreting results
 
 - Extract time is capped at one selected window
-- Full pipeline adds ~5-10ms for resampling + classification
+- Full pipeline adds ~2-8ms on top of extraction for resampling, classification and calibration
+- Deployed HTTP latency averages ~0.5-0.6 s per call, so transport and container overhead dominate the per-stage budget
 - p95 matters more than mean for judge scoring (worst-case latency)
